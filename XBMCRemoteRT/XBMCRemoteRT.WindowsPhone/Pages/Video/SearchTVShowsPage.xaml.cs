@@ -33,6 +33,7 @@ namespace XBMCRemoteRT.Pages.Video
 
         private List<TVShow> allTVShows;
         private List<TVShow> filteredTVShows;
+        private List<TVShow> emptyList = new List<TVShow>();
 
         public SearchTVShowsPage()
         {
@@ -104,6 +105,7 @@ namespace XBMCRemoteRT.Pages.Video
         /// handlers that cannot cancel the navigation request.</param>
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendView("SearchTVShowsPage");
             this.navigationHelper.OnNavigatedTo(e);
         }
 
@@ -154,6 +156,15 @@ namespace XBMCRemoteRT.Pages.Video
             control.IsEnabled = false;
             control.IsEnabled = true;
             control.IsTabStop = isTabStop;
+        }
+
+        private void SearchTVShowsTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            string query = SearchTVShowsTextBox.Text;
+            if (query.Length > 2)
+                SearchAndReload(SearchTVShowsTextBox.Text);
+            else
+                SearchTVShowsListView.ItemsSource = emptyList;
         }
     }
 }

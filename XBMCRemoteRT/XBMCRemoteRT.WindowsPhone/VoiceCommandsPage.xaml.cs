@@ -84,6 +84,7 @@ namespace XBMCRemoteRT
         /// handlers that cannot cancel the navigation request.</param>
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendView("VoiceCommandsPage");
             var commandArgs = e.Parameter as VoiceCommandActivatedEventArgs;
             SpeechRecognitionResult speechRecognitionResult = commandArgs.Result;
             ExecuteVoiceCommand(speechRecognitionResult);
@@ -98,7 +99,7 @@ namespace XBMCRemoteRT
 
             string voiceCommandName = result.RulePath[0];
             string textSpoken = result.Text;
-
+            
             switch (voiceCommandName)
             {
                 case "PlayArtist":
@@ -191,6 +192,14 @@ namespace XBMCRemoteRT
                 default:
                     break;
             }
+            if (searchHitState == SearchHitState.Single)
+            {
+                GlobalVariables.CurrentTracker.SendEvent(EventCategories.VoiceCommand, EventActions.VoiceCommand, "Single" + voiceCommandName, 0);
+            }
+            else if (searchHitState == SearchHitState.None)
+            {
+                GlobalVariables.CurrentTracker.SendEvent(EventCategories.VoiceCommand, EventActions.VoiceCommand, "Zero" + voiceCommandName, 0);
+            }
         }
 
         private async Task<bool> LoadAndConnnect()
@@ -231,6 +240,7 @@ namespace XBMCRemoteRT
 
         private void YesButton_Click(object sender, RoutedEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendEvent(EventCategories.VoiceCommand, EventActions.Click, "VoiceCommandYes", 0);
             switch (searchHitState)
             {
                 case SearchHitState.Single:
@@ -262,8 +272,40 @@ namespace XBMCRemoteRT
 
         private void NoButton_Click(object sender, RoutedEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendEvent(EventCategories.VoiceCommand, EventActions.Click, "VoiceCommandNo", 0);
             if (searchHitState == SearchHitState.Single)
                 Player.Stop(GlobalVariables.CurrentPlayerState.PlayerType);
+
+            Frame.Navigate(typeof(CoverPage));
+        }
+
+        private void SearchedItem_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            // For single results, play is started automatically and tapping
+            // would restart the media. We only want to play media for All and
+            // Multiple (and None) SearchHitStates.
+            if (searchHitState != SearchHitState.Single)
+            {
+                var tappedItem = (sender as Grid).DataContext;
+                if (tappedItem is Artist)
+                {
+                    Player.PlayArtist(tappedItem as Artist);
+                }
+                else if (tappedItem is Movie)
+                {
+                    Player.PlayMovie(tappedItem as Movie);
+                }
+                else if (tappedItem is Album)
+                {
+                    Player.PlayAlbum(tappedItem as Album);
+                }
+                else
+                {
+                    // Unrecognized media type. Early return so we don't navigate
+                    // away from the page
+                    return;
+                }
+            }
 
             Frame.Navigate(typeof(CoverPage));
         }

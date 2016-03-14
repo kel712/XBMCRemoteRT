@@ -1,27 +1,18 @@
-﻿using XBMCRemoteRT.Common;
-using System;
-using System.Collections.Generic;
-using System.IO;
+﻿using System;
 using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
-using Windows.Graphics.Display;
-using Windows.UI.ViewManagement;
+using System.Threading.Tasks;
+using Windows.ApplicationModel.Resources;
+using Windows.UI.Popups;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
-using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
-using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
-using XBMCRemoteRT.Models;
-using System.Threading.Tasks;
-using XBMCRemoteRT.RPCWrappers;
+using XBMCRemoteRT.Common;
 using XBMCRemoteRT.Helpers;
-using Windows.UI.Popups;
-using System.Diagnostics;
+using XBMCRemoteRT.Models.Network;
 using XBMCRemoteRT.Pages;
+using XBMCRemoteRT.RPCWrappers;
 
 // The Basic Page item template is documented at http://go.microsoft.com/fwlink/?LinkID=390556
 
@@ -32,10 +23,12 @@ namespace XBMCRemoteRT
     /// </summary>
     public sealed partial class MainPage : Page
     {
-        private enum PageStates { Ready, Connecting }
+        private enum PageStates { Ready, Busy }
 
         private NavigationHelper navigationHelper;
         private ObservableDictionary defaultViewModel = new ObservableDictionary();
+
+        ResourceLoader loader = new Windows.ApplicationModel.Resources.ResourceLoader();
 
         public MainPage()
         {
@@ -46,7 +39,8 @@ namespace XBMCRemoteRT
             this.navigationHelper.SaveState += this.NavigationHelper_SaveState;
 
             this.NavigationCacheMode = NavigationCacheMode.Required;
-
+            //this.TempImage.DataContext = new { ImageUri = "http://10.0.0.2:8080/image/image://http%253a%252f%252fthetvdb.com%252fbanners%252fposters%252f121361-27.jpg" };
+            DataContext = App.ConnectionsVM;
         }
 
         /// <summary>
@@ -108,26 +102,33 @@ namespace XBMCRemoteRT
         /// </summary>
         /// <param name="e">Provides data for navigation methods and event
         /// handlers that cannot cancel the navigation request.</param>
-        protected override void OnNavigatedTo(NavigationEventArgs e)
+        protected async override void OnNavigatedTo(NavigationEventArgs e)
         {
             this.navigationHelper.OnNavigatedTo(e);
+
+            GlobalVariables.CurrentTracker.SendView("MainPage");
+
+            await App.ConnectionsVM.ReloadConnections();
+
+            bool isAutoConnectEnabled = (bool)SettingsHelper.GetValue("AutoConnect", true);
+
             SetPageState(PageStates.Ready);
             Frame.BackStack.Clear();
             bool tryAutoLoad = true;
             if (e.Parameter.ToString() != string.Empty)
                 tryAutoLoad = (bool)e.Parameter;
 
-            if (e.NavigationMode != NavigationMode.Back && tryAutoLoad)
+            if (e.NavigationMode != NavigationMode.Back && isAutoConnectEnabled && tryAutoLoad)
             {
-                LoadAndConnnect();
+                ConnnectRecent();
             }
 
         }
 
-        private async void LoadAndConnnect()
+        private void ConnnectRecent()
         {
-            await App.ConnectionsVM.ReloadConnections();
-            DataContext = App.ConnectionsVM;
+            //await App.ConnectionsVM.ReloadConnections();
+            //DataContext = App.ConnectionsVM;
             string ip = (string)SettingsHelper.GetValue("RecentServerIP");
             if (ip != null)
             {
@@ -157,45 +158,95 @@ namespace XBMCRemoteRT
 
         private void AboutAppBarButton_Click(object sender, RoutedEventArgs e)
         {
-
-        }
-
-        private void FeedbackAppBarButton_Click(object sender, RoutedEventArgs e)
-        {
-            Frame.Navigate(typeof(FeedbackPage));
+            Frame.Navigate(typeof(AboutPivot));
         }
 
         private async Task ConnectToServer(ConnectionItem connectionItem)
         {
-            SetPageState(PageStates.Connecting);
+            string connectingTo = loader.GetString("ConnectingTo");
+            SetPageState(PageStates.Busy, string.Format(connectingTo, connectionItem.ConnectionName));
 
-            bool isSuccessful = await JSONRPC.Ping(connectionItem);
+            string bePatientText = loader.GetString("BePatient");
+            int wakeupTime = connectionItem.WakeUpTime < 5 ? 5 : connectionItem.WakeUpTime;
+            int stepSize = 5;
+
+            DateTime wakeUpStart = DateTime.Now;
+            bool isSuccessful = false;
+            if (connectionItem.AutoWake)
+            {
+                uint result = await WOLHelper.WakeUp(connectionItem);
+                if (result != 102)
+                {
+                    string messageText;
+                    switch (result)
+                    {
+                        case 10:
+                            messageText = loader.GetString("IPErrorMessage");
+                            break;
+                        default:
+                            messageText = loader.GetString("WOLErrorMessage") + result;
+                            break;
+                    }
+                    MessageDialog message = new MessageDialog(messageText, loader.GetString("WakeUpFailed"));
+                    await message.ShowAsync();
+                    SetPageState(PageStates.Ready);
+                    return;
+                }
+                bePatientText = String.Format(loader.GetString("WakeupPatientMessage"), MathExtension.CurrentStep(wakeupTime, stepSize), MathExtension.UpperStep(wakeupTime, stepSize));
+            }
+
+            MessageDialog tryMessage = new MessageDialog(loader.GetString("WOLConnectionErrorMessage"), loader.GetString("WOLConnectionErrorHeader"));
+            string keepTrying = loader.GetString("KeepTryingCommand");
+            string stopCommand = loader.GetString("StopCommand");
+            tryMessage.Commands.Add(new UICommand(keepTrying));
+            tryMessage.Commands.Add(new UICommand(stopCommand));
+
+            DateTime lastPopupTime = DateTime.Now;
+            while (!isSuccessful)
+            {
+                var timeSinceWakeUp = ( DateTime.Now - wakeUpStart).TotalSeconds;
+                var timeSincePopup = (DateTime.Now - lastPopupTime).TotalSeconds;
+                if (timeSinceWakeUp > 5)
+                {
+                    SetPageState(PageStates.Busy, bePatientText);
+                }
+                if (timeSincePopup > 10)
+                {
+                    var selectedCommand = await tryMessage.ShowAsync();
+                    lastPopupTime = DateTime.Now;
+                    if (selectedCommand.Label == stopCommand)
+                    {
+                        break;
+                    }
+                }
+                isSuccessful = await JSONRPC.Ping(connectionItem);
+            }
+
             if (isSuccessful)
             {
                 ConnectionManager.CurrentConnection = connectionItem;
                 SettingsHelper.SetValue("RecentServerIP", connectionItem.IpAddress);
+
+                int newWakeupTime = (int)(DateTime.Now - wakeUpStart).TotalSeconds;
+                connectionItem.WakeUpTime = newWakeupTime < 5 ? connectionItem.WakeUpTime : newWakeupTime;
+                App.ConnectionsVM.UpdateConnectionItem();
                 Frame.Navigate(typeof(CoverPage));
-            }
-            else
-            {
-                MessageDialog message = new MessageDialog("Could not reach the server.", "Connection Unsuccessful");
-                await message.ShowAsync();
-                SetPageState(PageStates.Ready);
-            }            
+            }         
+            SetPageState(PageStates.Ready);
         }
-        private void SetPageState(PageStates pageState)
+        
+        private void SetPageState(PageStates pageState, string busyMessage = "Connecting...")
         {
-            if (pageState == PageStates.Connecting)
+            if (pageState == PageStates.Busy)
             {
-                ConnectionsListView.IsEnabled = false;
+                PageStateTextBlock.Text = busyMessage;
+                PageStateGrid.Visibility = Windows.UI.Xaml.Visibility.Visible;
                 BottomAppBar.Visibility = Visibility.Collapsed;
-                ProgressRing.IsActive = true;
-            }
+            }         
             else
             {
-                ConnectionsListView.IsEnabled = true;
+                PageStateGrid.Visibility = Windows.UI.Xaml.Visibility.Collapsed;
                 BottomAppBar.Visibility = Visibility.Visible;
-                ProgressRing.IsActive = false;
             }
         }
 
@@ -209,6 +260,36 @@ namespace XBMCRemoteRT
         {
             ConnectionItem selectedConnection = (ConnectionItem)(sender as MenuFlyoutItem).DataContext;
             Frame.Navigate(typeof(EditConnectionPage), selectedConnection);
+        }
+
+        private async void WakeUpServerMFI_Click(object sender, RoutedEventArgs e)
+        {
+            ConnectionItem selectedConnection = (ConnectionItem)(sender as MenuFlyoutItem).DataContext;
+            if (selectedConnection.SubnetMask == null || selectedConnection.MACAddress == null)
+            {
+                MessageDialog message = new MessageDialog(loader.GetString("WOLMacNotFoundMessage"), loader.GetString("WOLMacNotFoundHeader"));
+                await message.ShowAsync();
+                return;
+            }
+            SetPageState(PageStates.Busy, loader.GetString("WakingUp"));
+            uint result = await WOLHelper.WakeUp(selectedConnection);
+            await Task.Delay(3500);
+            SetPageState(PageStates.Ready);
+            if (result != 102)
+            {
+                string messageText;
+                switch (result)
+                {
+                    case 10:
+                        messageText = loader.GetString("IPErrorMessage");
+                        break;
+                    default:
+                        messageText = loader.GetString("WOLErrorMessage") + result;
+                        break;
+                }
+                MessageDialog message = new MessageDialog(messageText, loader.GetString("WakeUpFailed"));
+                await message.ShowAsync();
+            }
         }
 
         private void ConnectionItemWrapper_Holding(object sender, HoldingRoutedEventArgs e)

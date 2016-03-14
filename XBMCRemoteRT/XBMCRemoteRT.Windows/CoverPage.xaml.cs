@@ -21,6 +21,7 @@ using XBMCRemoteRT.Models.Common;
 using XBMCRemoteRT.Models.Video;
 using XBMCRemoteRT.Pages;
 using XBMCRemoteRT.Pages.Audio;
+using XBMCRemoteRT.Pages.Video;
 using XBMCRemoteRT.RPCWrappers;
 
 namespace XBMCRemoteRT
@@ -123,7 +124,7 @@ namespace XBMCRemoteRT
         {
             var tappedAlbum = (sender as Grid).DataContext as Album;
             GlobalVariables.CurrentAlbum = tappedAlbum;
-            //Frame.Navigate(typeof(AlbumPage));
+            Frame.Navigate(typeof(AlbumPage));
         }
 
         private void EpisodeWrapper_Tapped(object sender, TappedRoutedEventArgs e)
@@ -136,7 +137,7 @@ namespace XBMCRemoteRT
         {
             var tappedMovie = (sender as Grid).DataContext as Movie;
             GlobalVariables.CurrentMovie = tappedMovie;
-            //Frame.Navigate(typeof(MovieDetailsHub));
+            Frame.Navigate(typeof(MovieDetailsHub));
         }
 
 
@@ -144,7 +145,7 @@ namespace XBMCRemoteRT
         {
             if (Albums == null)
             {
-                Albums = await AudioLibrary.GetRecentlyAddedAlbums(new Limits { Start = 0, End = 12 });
+                Albums = await AudioLibrary.GetRecentlyAddedAlbums(new Limits { Start = 0, End = 8 });
                 MusicHubSection.DataContext = Albums;
             }
 
@@ -173,12 +174,12 @@ namespace XBMCRemoteRT
 
         private void TVShowsHeaderWrapper_Tapped(object sender, TappedRoutedEventArgs e)
         {
-            //Frame.Navigate(typeof(AllTVShowsPage));
+            Frame.Navigate(typeof(AllTVShowsPage));
         }
 
         private void MoviesHeaderWrapper_Tapped(object sender, TappedRoutedEventArgs e)
         {
-            //Frame.Navigate(typeof(AllMoviesPivot));
+            Frame.Navigate(typeof(AllMoviesPage));
         }
 
         private async void PreviousButton_Click(object sender, RoutedEventArgs e)

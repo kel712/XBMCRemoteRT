@@ -19,6 +19,7 @@ using XBMCRemoteRT.Models.Audio;
 using XBMCRemoteRT.Helpers;
 using XBMCRemoteRT.RPCWrappers;
 using Newtonsoft.Json.Linq;
+using System.Diagnostics;
 
 // The Basic Page item template is documented at http://go.microsoft.com/fwlink/?LinkID=390556
 
@@ -110,6 +111,7 @@ namespace XBMCRemoteRT.Pages.Audio
         /// handlers that cannot cancel the navigation request.</param>
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendView("AllMusicPage");
             this.navigationHelper.OnNavigatedTo(e);
         }
 
@@ -122,6 +124,8 @@ namespace XBMCRemoteRT.Pages.Audio
 
         private async void ReloadAll()
         {
+            var loadSartTime = DateTime.Now;
+
             ConnectionManager.ManageSystemTray(true);
             allArtists = await AudioLibrary.GetArtists();
             var groupedAllArtists = GroupingHelper.GroupList(allArtists, (Artist a) => { return a.Label; }, true);
@@ -136,18 +140,8 @@ namespace XBMCRemoteRT.Pages.Audio
             var groupedAllSongs = GroupingHelper.GroupList(allSongs, (Song s) => { return s.Label; }, true);
             SongsCVS.Source = groupedAllSongs;
             ConnectionManager.ManageSystemTray(false);
-        }
 
-        private void PlayArtistBorder_Tapped(object sender, TappedRoutedEventArgs e)
-        {
-
-        }
-
-        private void ArtistNameTextBlock_Tapped(object sender, TappedRoutedEventArgs e)
-        {
-            Artist tappedArtist = (sender as TextBlock).DataContext as Artist;
-            GlobalVariables.CurrentArtist = tappedArtist;
-            Frame.Navigate(typeof(ArtistDetailsHub));
+            GlobalVariables.CurrentTracker.SendTiming((DateTime.Now.Subtract(loadSartTime)), TimingCategories.LoadTime, "AllMusic", "AllMusic");
         }
 
         private void AlbumArtWrapper_Tapped(object sender, TappedRoutedEventArgs e)
@@ -161,6 +155,38 @@ namespace XBMCRemoteRT.Pages.Audio
         {
             var tappedSong = (sender as StackPanel).DataContext as Song;
             Player.PlaySong(tappedSong);
+        }
+
+        private void QueueSongMFI_Click(object sender, RoutedEventArgs e)
+        {
+            Playlist.AddSong((Song)(sender as MenuFlyoutItem).DataContext);
+        }
+
+        private void SongItemWrapper_Holding(object sender, HoldingRoutedEventArgs e)
+        {
+            FlyoutBase.ShowAttachedFlyout((FrameworkElement)sender);
+        }
+
+        private void ArtistItemWrapper_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            Artist tappedArtist = (sender as StackPanel).DataContext as Artist;
+            GlobalVariables.CurrentArtist = tappedArtist;
+            Frame.Navigate(typeof(ArtistDetailsHub));
+        }
+
+        private void RefreshMusicAppBarButton_Click(object sender, RoutedEventArgs e)
+        {
+            ReloadAll();
+        }
+
+        private async void PartyModeAppBarButton_Click(object sender, RoutedEventArgs e)
+        {
+            List<Players> activePlayers = await Player.GetActivePlayers();
+            if (!activePlayers.Contains(Players.Audio))
+            {
+                await Player.PlaySong(allSongs[0]);
+            }
+            await Player.SetPartyMode(Players.Audio, true);
         }
     }
 }

@@ -15,12 +15,14 @@ using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
-
-// The Basic Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=234237
 using XBMCRemoteRT.Helpers;
 using XBMCRemoteRT.Models;
 using XBMCRemoteRT.Pages;
 using XBMCRemoteRT.RPCWrappers;
+using XBMCRemoteRT.Models.Network;
+
+// The Basic Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=234237
+
 
 namespace XBMCRemoteRT
 {
@@ -136,7 +138,15 @@ namespace XBMCRemoteRT
         private async Task ConnectToServer(ConnectionItem connectionItem)
         {
             SetPageState(PageStates.Connecting);
-            var isSuccessful = await JSONRPC.Ping(connectionItem);
+            bool isSuccessful = false;
+            try
+            {
+                isSuccessful = await JSONRPC.Ping(connectionItem);
+            }
+            catch
+            {
+                isSuccessful = false;
+            }
             if (isSuccessful)
             {
                 ConnectionManager.CurrentConnection = connectionItem;
@@ -204,6 +214,11 @@ namespace XBMCRemoteRT
         private void ConnectionItemWrapper_OnRightTapped(object sender, RightTappedRoutedEventArgs e)
         {
             FlyoutBase.ShowAttachedFlyout((FrameworkElement)sender);
+        }
+
+        private void ConnectionsListView_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            ConnectionsListView.SelectedItem = null;
         }
     }
 }

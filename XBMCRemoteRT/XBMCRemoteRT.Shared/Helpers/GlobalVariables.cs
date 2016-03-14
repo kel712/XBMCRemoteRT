@@ -1,4 +1,6 @@
-﻿using System;
+﻿using GoogleAnalytics;
+using GoogleAnalytics.Core;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -19,8 +21,8 @@ namespace XBMCRemoteRT.Helpers
 
         public static Movie CurrentMovie { get; set; }
 
-        //public static NowPlayingItem NowPlaying { get; set; }
-
         public static PlayerState CurrentPlayerState { get; set; }
+
+        public static Tracker CurrentTracker = EasyTracker.GetTracker();
     }
 }

@@ -18,6 +18,8 @@ using Windows.UI.Xaml.Navigation;
 using XBMCRemoteRT.RPCWrappers;
 using Newtonsoft.Json.Linq;
 using XBMCRemoteRT.Helpers;
+using System.Threading.Tasks;
+using Windows.UI.Xaml.Media.Animation;
 
 // The Basic Page item template is documented at http://go.microsoft.com/fwlink/?LinkID=390556
 
@@ -41,7 +43,10 @@ namespace XBMCRemoteRT.Pages
             this.navigationHelper = new NavigationHelper(this);
             this.navigationHelper.LoadState += this.NavigationHelper_LoadState;
             this.navigationHelper.SaveState += this.NavigationHelper_SaveState;
-        }
+
+            DataContext = GlobalVariables.CurrentPlayerState;
+            PopulateFlyout();
+        }        
 
         /// <summary>
         /// Gets the <see cref="NavigationHelper"/> associated with this <see cref="Page"/>.
@@ -104,7 +109,19 @@ namespace XBMCRemoteRT.Pages
         /// handlers that cannot cancel the navigation request.</param>
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendView("InputPage");
             this.navigationHelper.OnNavigatedTo(e);
+            ShowButtons();
+        }
+
+        private void ShowButtons()
+        {
+            string[] buttons = ((string)SettingsHelper.GetValue("ButtonsToShow", "GoBack, Home, TextInput")).Split(',');
+            foreach (string button in buttons)
+            {
+                Button btn = this.FindName(button.Trim() + "Button") as Button;
+                btn.Visibility = Visibility.Visible;
+            }
         }
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -175,14 +192,22 @@ namespace XBMCRemoteRT.Pages
 
         private async void SpeedDownButton_Click(object sender, RoutedEventArgs e)
         {
-            int speed = GlobalVariables.CurrentPlayerState.CurrentPlayerProperties.Speed;
-
-            if (speed != 0 && speed != -32)
+            string backwardCommand = (string)SettingsHelper.GetValue("BackwardButtonCommand", "SmallBackward");
+            if (backwardCommand == "DecreaseSpeed")
             {
-                int index = Array.IndexOf(Speeds, speed);
-                int newSpeed = Speeds[index - 1];
-                await Player.SetSpeed(GlobalVariables.CurrentPlayerState.PlayerType, newSpeed);
-                await PlayerHelper.RefreshPlayerState();
+                int speed = GlobalVariables.CurrentPlayerState.CurrentPlayerProperties.Speed;
+
+                if (speed != 0 && speed != -32)
+                {
+                    int index = Array.IndexOf(Speeds, speed);
+                    int newSpeed = Speeds[index - 1];
+                    await Player.SetSpeed(GlobalVariables.CurrentPlayerState.PlayerType, newSpeed);
+                    await PlayerHelper.RefreshPlayerState();
+                }
+            }
+            else
+            {
+                Player.Seek(GlobalVariables.CurrentPlayerState.PlayerType, backwardCommand.ToLower());
             }
         }
 
@@ -200,14 +225,22 @@ namespace XBMCRemoteRT.Pages
 
         private async void SpeedUpButton_Click(object sender, RoutedEventArgs e)
         {
-            int speed = GlobalVariables.CurrentPlayerState.CurrentPlayerProperties.Speed;
-
-            if (speed != 0 && speed != 32)
+            string forwardCommand = (string)SettingsHelper.GetValue("ForwardButtonCommand", "SmallForward");
+            if (forwardCommand == "IncreaseSpeed")
             {
-                int index = Array.IndexOf(Speeds, speed);
-                int newSpeed = Speeds[index + 1];
-                await Player.SetSpeed(GlobalVariables.CurrentPlayerState.PlayerType, newSpeed);
-                await PlayerHelper.RefreshPlayerState();
+                int speed = GlobalVariables.CurrentPlayerState.CurrentPlayerProperties.Speed;
+
+                if (speed != 0 && speed != 32)
+                {
+                    int index = Array.IndexOf(Speeds, speed);
+                    int newSpeed = Speeds[index + 1];
+                    await Player.SetSpeed(GlobalVariables.CurrentPlayerState.PlayerType, newSpeed);
+                    await PlayerHelper.RefreshPlayerState();
+                }
+            }
+            else
+            {
+                Player.Seek(GlobalVariables.CurrentPlayerState.PlayerType, forwardCommand.ToLower());
             }
         }
 
@@ -219,24 +252,14 @@ namespace XBMCRemoteRT.Pages
 
         private async void VolumeSlider_Loaded(object sender, RoutedEventArgs e)
         {
-            JObject result = await Applikation.GetProperties();
-            int volume = (int)result["volume"];
-            VolumeSlider.Value = volume;
-            isVolumeSetProgrammatically = true;
-        }
-
-        //private async void VolumeSlider_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        //{
-        //    double doubleValue = VolumeSlider.Value;
-        //    int value = (int)Math.Round(doubleValue);
-        //    int newValue = await Applikation.SetVolume(value);
-        //}
+            int volume = await Applikation.GetVolume();
+            SetVolumeSliderValue(volume);
+        }        
 
         private void QuitButton_Click(object sender, RoutedEventArgs e)
         {
             Applikation.Quit();
         }
-
 
         private DispatcherTimer timer;
         private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
@@ -269,14 +292,101 @@ namespace XBMCRemoteRT.Pages
             timer.Tick -= timer_Tick;
         }
 
-        //private void SendTextBox_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)
-        //{
-        //    if (e.Key == Key.Enter)
-        //    {
-        //        Input.SendText(SendTextBox.Text, true);
-        //        SendTextBox.Text = string.Empty;
-        //        this.Focus();
-        //    }
-        //}
+        private async void VolumeDownWrapper_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            int currentVolume = await Applikation.GetVolume();
+            Applikation.SetVolume(--currentVolume);
+            SetVolumeSliderValue(currentVolume);
+        }
+
+        private async void VolumeUpWrapper_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            int currentVolume = await Applikation.GetVolume();
+            Applikation.SetVolume(++currentVolume);
+            SetVolumeSliderValue(currentVolume);
+        }
+
+        private void SetVolumeSliderValue(int value)
+        {
+            isVolumeSetProgrammatically = true;
+            VolumeSlider.Value = value;
+        }
+
+        private void SendTextBox_KeyUp(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Enter)
+            {
+                Input.SendText(SendTextBox.Text, true);
+                SendTextBox.Text = string.Empty;
+                LoseFocus(sender);
+            }
+        }
+
+        private void LoseFocus(object sender)
+        {
+            var control = sender as Control;
+            var isTabStop = control.IsTabStop;
+            control.IsTabStop = false;
+            control.IsEnabled = false;
+            control.IsEnabled = true;
+            control.IsTabStop = isTabStop;
+        }
+
+        private void TextInputButton_Click(object sender, RoutedEventArgs e)
+        {
+            SendTextBox.Visibility = Visibility.Visible;
+            (this.Resources["ShowSendTextBox"] as Storyboard).Begin();
+            SendTextBox.Focus(FocusState.Keyboard);
+        }
+
+        private void SendTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            ((this.Resources["HideSendTextBox"]) as Storyboard).Begin();
+        }
+
+        private void SubtitlesButton_Click(object sender, RoutedEventArgs e)
+        {
+            Input.ExecuteAction("nextsubtitle");
+        }
+
+        private void AdvancedButton_Click(object sender, RoutedEventArgs e)
+        {
+            AdvancedMenuFlyout.SelectedItem = null;
+        }
+
+        
+        private string audioLibUpdate;// = "update audio library";
+        private string videoLibUpdate;// = "update video library";
+        private string audioLibClean;// = "clean audio library";
+        private string videoLibClean;// ="clean video library";
+        private string showSubtitleSerach;// = "download subtitles";
+
+        private void PopulateFlyout()
+        {
+            var loader = new Windows.ApplicationModel.Resources.ResourceLoader();
+            audioLibUpdate = loader.GetString("UpdateAudioLibrary");
+            videoLibUpdate = loader.GetString("UpdateVideoLibrary");
+            audioLibClean = loader.GetString("CleanAudioLibrary");
+            videoLibClean = loader.GetString("CleanVideoLibrary");
+            showSubtitleSerach = loader.GetString("DownloadSubtitles");
+
+            AdvancedMenuFlyout.ItemsSource = new List<string> { audioLibUpdate, videoLibUpdate, audioLibClean, videoLibClean, showSubtitleSerach };
+        }
+
+        private void AdvancedMenuFlyout_ItemsPicked(ListPickerFlyout sender, ItemsPickedEventArgs args)
+        {
+            string pickedCommand = (string)AdvancedMenuFlyout.SelectedItem;
+            
+            if (pickedCommand == audioLibUpdate)
+                AudioLibrary.Scan();
+            else if (pickedCommand == videoLibUpdate)
+                VideoLibrary.Scan();
+            else if (pickedCommand == audioLibClean)
+                AudioLibrary.Clean();
+            else if (pickedCommand == videoLibClean)
+                VideoLibrary.Clean();
+            else if (pickedCommand == showSubtitleSerach)
+                GUI.ShowSubtitleSearch();
+        }
     }
 }

@@ -48,10 +48,18 @@ namespace XBMCRemoteRT.Pages.Audio
 
         async void AlbumPage_Loaded(object sender, RoutedEventArgs e)
         {
+            var loader = new Windows.ApplicationModel.Resources.ResourceLoader();
+            string track = loader.GetString("Track");
+            string tracks = loader.GetString("Tracks");
+
             ConnectionManager.ManageSystemTray(true);
             JObject filter = new JObject(new JProperty("albumid", GlobalVariables.CurrentAlbum.AlbumId));
-            songsInAlbum = await AudioLibrary.GetSongs(filter);
+            JObject sort = new JObject(new JProperty("method", "track"));
+            songsInAlbum = await AudioLibrary.GetSongs(filter, null, sort);
             SongsListView.ItemsSource = songsInAlbum;
+
+            TrackCountTextBlock.Text = songsInAlbum.Count.ToString();
+            TracksTextBlock.Text = songsInAlbum.Count > 1 ? tracks : track;
 
             currentAlbum = await AudioLibrary.GetAlbumDetails(GlobalVariables.CurrentAlbum.AlbumId);
             AlbumInfoGrid.DataContext = currentAlbum;
@@ -119,6 +127,7 @@ namespace XBMCRemoteRT.Pages.Audio
         /// handlers that cannot cancel the navigation request.</param>
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendView("AlbumPage");
             this.navigationHelper.OnNavigatedTo(e);
         }
 
@@ -133,6 +142,26 @@ namespace XBMCRemoteRT.Pages.Audio
         {
             var tappedSong = (sender as StackPanel).DataContext as Song;
             Player.PlaySong(tappedSong);
+        }
+
+        private void PlayAlbumButton_Click(object sender, RoutedEventArgs e)
+        {
+            Player.PlayAlbum(GlobalVariables.CurrentAlbum);
+        }
+
+        private void QueueAlbumAppBarButton_Click(object sender, RoutedEventArgs e)
+        {
+            Playlist.AddAlbum(GlobalVariables.CurrentAlbum);
+        }
+
+        private void QueueSongMFI_Click(object sender, RoutedEventArgs e)
+        {
+            Playlist.AddSong((Song)(sender as MenuFlyoutItem).DataContext);
+        }
+
+        private void SongItemWrapper_Holding(object sender, HoldingRoutedEventArgs e)
+        {
+            FlyoutBase.ShowAttachedFlyout((FrameworkElement)sender);
         }
     }
 }

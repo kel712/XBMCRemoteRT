@@ -9,7 +9,8 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.UI.Popups;
-using XBMCRemoteRT.Models;
+using Windows.UI.ViewManagement;
+using XBMCRemoteRT.Models.Network;
 
 namespace XBMCRemoteRT.Helpers
 {
@@ -17,7 +18,6 @@ namespace XBMCRemoteRT.Helpers
     {
         /// <summary>
         /// Class for providing methods and members related to making and maintaining connections to the server.
-        /// An object is created from this class at the app initiation time (see App.xaml.cs) and used universally across the app.
         /// </summary>
         /// 
 
@@ -52,7 +52,7 @@ namespace XBMCRemoteRT.Helpers
             request.Content = new StringContent(requestData);
             request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json"); //Required to be recognized as valid JSON request.
 
-            if (CurrentConnection.Password != String.Empty)
+            if (CurrentConnection.HasCredentials())
                 request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(String.Format("{0}:{1}", CurrentConnection.Username, CurrentConnection.Password))));
             
             HttpResponseMessage response = await httpClient.SendAsync(request);
@@ -86,15 +86,24 @@ namespace XBMCRemoteRT.Helpers
             }
             else
             {
-                MessageDialog msg = new MessageDialog("Make sure Kodi is running and you're connected.", "Server not found");
-                await msg.ShowAsync();
                 return new JObject();
             }
         }
 
-        public static void ManageSystemTray(bool p)
+        public static void ManageSystemTray(bool isActive, string message = "Loading...")
         {
-            //TODO!
+#if WINDOWS_PHONE_APP
+            StatusBarProgressIndicator progressIndicator = StatusBar.GetForCurrentView().ProgressIndicator;
+            progressIndicator.Text = message;
+            if (isActive)
+            {
+                progressIndicator.ShowAsync();
+            }
+            else
+            {
+                progressIndicator.HideAsync();
+            }
+#endif
         }
     }
 }

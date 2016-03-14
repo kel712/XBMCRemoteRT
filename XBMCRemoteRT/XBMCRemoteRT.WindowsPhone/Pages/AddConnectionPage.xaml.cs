@@ -17,6 +17,8 @@ using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 using XBMCRemoteRT.Models;
 using Windows.UI.Popups;
+using XBMCRemoteRT.Helpers;
+using XBMCRemoteRT.Models.Network;
 
 // The Basic Page item template is documented at http://go.microsoft.com/fwlink/?LinkID=390556
 
@@ -100,6 +102,7 @@ namespace XBMCRemoteRT.Pages
         /// handlers that cannot cancel the navigation request.</param>
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendView("AddConnectionPage");
             this.navigationHelper.OnNavigatedTo(e);
         }
 

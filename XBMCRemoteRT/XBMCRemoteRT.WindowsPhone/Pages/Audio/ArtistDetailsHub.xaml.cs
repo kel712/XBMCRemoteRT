@@ -107,6 +107,7 @@ namespace XBMCRemoteRT.Pages.Audio
         /// handlers that cannot cancel the navigation request.</param>
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendView("ArtistDetailsPage");
             this.navigationHelper.OnNavigatedTo(e);
         }
 
@@ -142,6 +143,21 @@ namespace XBMCRemoteRT.Pages.Audio
         private void PlayArtistAppBarButton_Click(object sender, RoutedEventArgs e)
         {
             Player.PlayArtist(GlobalVariables.CurrentArtist);
+        }
+
+        private void QueueArtistAppBarButton_Click(object sender, RoutedEventArgs e)
+        {
+            Playlist.AddArtist(GlobalVariables.CurrentArtist);
+        }
+
+        private void QueueSongMFI_Click(object sender, RoutedEventArgs e)
+        {
+            Playlist.AddSong((Song)(sender as MenuFlyoutItem).DataContext);
+        }
+
+        private void SongItemWrapper_Holding(object sender, HoldingRoutedEventArgs e)
+        {
+            FlyoutBase.ShowAttachedFlyout((FrameworkElement)sender);
         }
     }
 }

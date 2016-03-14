@@ -24,6 +24,9 @@ using XBMCRemoteRT.Pages.Video;
 using XBMCRemoteRT.Pages;
 using XBMCRemoteRT.Helpers;
 using XBMCRemoteRT.Models;
+using GoogleAnalytics.Core;
+using GoogleAnalytics;
+using Windows.UI.Xaml.Media.Animation;
 
 // The Basic Page item template is documented at http://go.microsoft.com/fwlink/?LinkID=390556
 
@@ -49,9 +52,11 @@ namespace XBMCRemoteRT
 
             NavigationCacheMode = Windows.UI.Xaml.Navigation.NavigationCacheMode.Required;
 
+            //this.TempImage.DataContext = new { ImageUri = "http://10.0.0.2:8080/image/image://http%253a%252f%252fthetvdb.com%252fbanners%252fposters%252f121361-27.jpg" };
+
             if (GlobalVariables.CurrentPlayerState == null)
                 GlobalVariables.CurrentPlayerState = new PlayerState();
-            NowPlayingHubSection.DataContext = GlobalVariables.CurrentPlayerState;
+            DataContext = GlobalVariables.CurrentPlayerState;
             PlayerHelper.RefreshPlayerState();
             timer = new DispatcherTimer();
             timer.Interval = TimeSpan.FromSeconds(10);
@@ -126,7 +131,9 @@ namespace XBMCRemoteRT
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
             this.navigationHelper.OnNavigatedTo(e);
+            GlobalVariables.CurrentTracker.SendView("CoverPage");
             RefreshListsIfNull();
+            ServerNameTextBlock.Text = ConnectionManager.CurrentConnection.ConnectionName;
             Frame.BackStack.Clear();
         }
 
@@ -145,11 +152,13 @@ namespace XBMCRemoteRT
         {
             var tappedAlbum = (sender as Grid).DataContext as Album;
             GlobalVariables.CurrentAlbum = tappedAlbum;
-            Frame.Navigate(typeof(AlbumPage));
+            CommonNavigationTransitionInfo infoOverride = new CommonNavigationTransitionInfo();
+            Frame.Navigate(typeof(AlbumPage), null, infoOverride);
         }
 
         private void EpisodeWrapper_Tapped(object sender, TappedRoutedEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendEvent(EventCategories.UIInteraction, EventActions.Click, "CoverPageEpisodeWrapper", 0);
             var tappedEpisode = (sender as Grid).DataContext as Episode;
             Player.PlayEpidose(tappedEpisode);
         }
@@ -184,6 +193,7 @@ namespace XBMCRemoteRT
 
         private void RemoteAppBarButton_Click(object sender, RoutedEventArgs e)
         {
+            GlobalVariables.CurrentTracker.SendEvent(EventCategories.UIInteraction, EventActions.Click, "RemoteAppBarButton", 0);
             Frame.Navigate(typeof(InputPage));
         }
 
@@ -204,7 +214,8 @@ namespace XBMCRemoteRT
 
         private void NowPlayingHeaderWrapper_Tapped(object sender, TappedRoutedEventArgs e)
         {
-
+            GlobalVariables.CurrentTracker.SendEvent(EventCategories.UIInteraction, EventActions.Click, "NowPlayingHeader", 0);
+            Frame.Navigate(typeof(InputPage));
         }
 
         private async void PreviousButton_Click(object sender, RoutedEventArgs e)
@@ -221,6 +232,22 @@ namespace XBMCRemoteRT
         {
             await Player.GoTo(GlobalVariables.CurrentPlayerState.PlayerType, GoTo.Next);
             await PlayerHelper.RefreshPlayerState();
+        }
+
+        private void AboutAppBarButton_Click(object sender, RoutedEventArgs e)
+        {
+            Frame.Navigate(typeof(AboutPivot));
+        }
+
+        private void SettingsAppBarButton_Click(object sender, RoutedEventArgs e)
+        {
+            Frame.Navigate(typeof(SettingsPivot));
+        }
+
+        private void SwitchServerAppBarButton_Click(object sender, RoutedEventArgs e)
+        {
+            NavigationTransitionInfo transitionInfo = new SlideNavigationTransitionInfo();
+            Frame.Navigate(typeof(MainPage), false, transitionInfo);
         }
     }
 }
